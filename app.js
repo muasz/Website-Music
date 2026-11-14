@@ -42,12 +42,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const volumeSlider = document.getElementById('volumeSlider');
 
   const categoryPills = document.querySelectorAll('.cat-pill');
-  const albumCards = document.querySelectorAll('.album-card');
+  const albumCardsRow = document.getElementById('albumCardsRow');
+  const addTrackBtn = document.getElementById('addTrackBtn');
+  const trackFileInput = document.getElementById('trackFileInput');
   const playlistRows = document.querySelectorAll('.playlist-row');
   const toastPopup = document.getElementById('toastPopup');
   const toastMsg = document.getElementById('toastMsg');
   const searchInput = document.getElementById('searchInput');
   const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const getAlbumCards = () => albumCardsRow.querySelectorAll('.album-card');
 
   // Application State
   let isPlaying = false;
@@ -224,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateProgressUI();
 
     // Highlight corresponding album card if present
-    albumCards.forEach(card => {
+    getAlbumCards().forEach(card => {
       const cardTitle = card.querySelector('.card-title')?.textContent.trim();
       if (cardTitle && cardTitle.toLowerCase() === track.title.toLowerCase()) {
         card.classList.add('active-card');
@@ -342,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function filterCardsByCategory(category) {
-    albumCards.forEach(card => {
+    getAlbumCards().forEach(card => {
       if (category === 'classic') {
         card.style.display = 'flex';
       } else if (category === '90s') {
@@ -357,24 +360,121 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Click on Album Card to Play
-  albumCards.forEach(card => {
-    card.addEventListener('click', () => {
-      const trackId = card.dataset.trackId;
-      const track = engine.selectTrackById(trackId);
-      if (track) {
-        loadTrackMeta(track);
-        setPlayState(true);
-        showToast(`Now playing: ${track.title}`);
-      }
-    });
+  function addLocalTrackCard(track) {
+    const template = albumCardsRow.querySelector('.album-card');
+    if (!template) {
+      throw new Error('Cannot add a track card because the album carousel is empty.');
+    }
 
-    const quickPlay = card.querySelector('.card-quick-play');
-    if (quickPlay) {
-      quickPlay.addEventListener('click', (e) => {
-        e.stopPropagation();
-        card.click();
+    const card = template.cloneNode(true);
+    card.dataset.trackId = track.id;
+    card.dataset.localTrack = 'true';
+    card.classList.remove('active-card');
+    card.querySelector('.card-title').textContent = track.title;
+    card.querySelector('.card-artist').textContent = track.artist;
+    card.querySelector('.card-quick-play').title = `Play ${track.title}`;
+    addRemoveTrackButton(card, track);
+    albumCardsRow.appendChild(card);
+
+    const query = searchInput.value.toLowerCase().trim();
+    if (query) {
+      const searchableText = `${track.title} ${track.artist}`.toLowerCase();
+      card.style.display = searchableText.includes(query) ? 'flex' : 'none';
+    } else {
+      const activeCategory = document.querySelector('.cat-pill.active')?.dataset.category || 'classic';
+      if (activeCategory !== 'classic') filterCardsByCategory(activeCategory);
+    }
+  }
+
+  function addRemoveTrackButton(card, track) {
+    if (!track.src || card.querySelector('.card-remove-track')) return;
+
+    const button = document.createElement('button');
+    button.className = 'card-remove-track';
+    button.type = 'button';
+    button.textContent = '×';
+    button.title = `Remove ${track.title} from the player`;
+    button.setAttribute('aria-label', button.title);
+    card.querySelector('.card-art-frame').appendChild(button);
+  }
+
+  getAlbumCards().forEach(card => {
+    const track = engine.tracks.find(item => item.id === card.dataset.trackId);
+    if (track) addRemoveTrackButton(card, track);
+  });
+
+  async function removeTrackCard(card, button) {
+    const track = engine.tracks.find(item => item.id === card.dataset.trackId);
+    if (!track || !track.src) return;
+
+    const confirmed = window.confirm(
+      `Remove "${track.title}" from the player? The original file on disk will not be deleted.`
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    const result = await engine.removeAudioTrack(track.id);
+    card.remove();
+    if (result.wasCurrent) {
+      setPlayState(false);
+      loadTrackMeta(result.activeTrack);
+    }
+    showToast(`Removed: ${track.title}`);
+  }
+
+  // Click on album cards, including cards restored or added after page load.
+  albumCardsRow.addEventListener('click', (e) => {
+    const removeButton = e.target.closest('.card-remove-track');
+    if (removeButton) {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = removeButton.closest('.album-card');
+      removeTrackCard(card, removeButton).catch(error => {
+        console.error('Could not remove audio track:', error);
+        removeButton.disabled = false;
+        showToast('Could not remove this song from the player.');
       });
+      return;
+    }
+
+    const card = e.target.closest('.album-card');
+    if (!card) return;
+
+    const track = engine.selectTrackById(card.dataset.trackId);
+    if (track) {
+      loadTrackMeta(track);
+      setPlayState(true);
+      showToast(`Now playing: ${track.title}`);
+    }
+  });
+
+  addTrackBtn.addEventListener('click', () => trackFileInput.click());
+
+  trackFileInput.addEventListener('change', async () => {
+    const files = Array.from(trackFileInput.files || []);
+    if (files.length === 0) return;
+
+    addTrackBtn.disabled = true;
+    let addedCount = 0;
+    let failedCount = 0;
+
+    for (const file of files) {
+      try {
+        const track = await engine.addLocalTrack(file);
+        addLocalTrackCard(track);
+        addedCount++;
+      } catch (error) {
+        console.error(`Could not add audio file "${file.name}":`, error);
+        failedCount++;
+      }
+    }
+
+    addTrackBtn.disabled = false;
+    trackFileInput.value = '';
+    if (failedCount > 0) {
+      showToast(`${addedCount} song(s) added; ${failedCount} could not be added.`);
+    } else {
+      showToast(`${addedCount} song(s) added and saved in this browser.`);
     }
   });
 
@@ -397,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const query = e.target.value.toLowerCase().trim();
     clearSearchBtn.classList.toggle('hidden', query.length === 0);
 
-    albumCards.forEach(card => {
+    getAlbumCards().forEach(card => {
       const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
       const artist = card.querySelector('.card-artist')?.textContent.toLowerCase() || '';
       const match = title.includes(query) || artist.includes(query);
@@ -408,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
   clearSearchBtn.addEventListener('click', () => {
     searchInput.value = '';
     clearSearchBtn.classList.add('hidden');
-    albumCards.forEach(c => c.style.display = 'flex');
+    getAlbumCards().forEach(c => c.style.display = 'flex');
   });
 
   // Sidebar navigation feedback
@@ -448,6 +548,19 @@ document.addEventListener('DOMContentLoaded', () => {
     setPlayState(false);
     showToast('Could not play this audio file. Check the file path and format.');
   };
+
+  engine.loadLocalTracks()
+    .then(tracks => {
+      const availableTrackIds = new Set(engine.tracks.map(track => track.id));
+      getAlbumCards().forEach(card => {
+        if (!availableTrackIds.has(card.dataset.trackId)) card.remove();
+      });
+      tracks.forEach(addLocalTrackCard);
+    })
+    .catch(error => {
+      console.error('Could not restore saved local tracks:', error);
+      showToast('Could not load saved songs. Check this browser’s storage settings.');
+    });
 
   generateWaveform();
   updateProgressUI();

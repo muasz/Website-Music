@@ -15,7 +15,9 @@ Web audio player yang didesain dan dibuat persis sesuai dengan konsep retro-futu
 
 2. **Mesin Audio (Web Audio API)**:
    - Memutar track synth Lo-Fi procedural bawaan dan file MP3 lokal.
-   - Track *Disenchanted* memakai file `My Chemical Romance - Disenchanted.mp3` di folder project.
+   - Track *Disenchanted* dan *Can't Help Falling in Love* memakai file MP3 lokal di folder project.
+   - Gunakan tombol **+ Add songs** untuk memilih satu atau beberapa file audio; lagu tersimpan di browser ini dan tetap tersedia setelah halaman dimuat ulang.
+   - Tombol **×** pada kartu lagu menghapusnya dari player setelah konfirmasi; file asli di komputer tidak ikut dihapus.
    - **Efek Suara Gesekan Jarum Vinyl (*Vinyl Crackle*)**: Fitur suara kresek-kresek khas piringan hitam analog vintage yang dapat dinyalakan/dimatikan dengan satu tombol.
    - **Efek Deselerasi Motor Turntable**: Saat dihentikan (*Pause*), suara melambat dengan efek *pitch-glide down* khas piringan analog yang mati.
 
@@ -26,7 +28,7 @@ Web audio player yang didesain dan dibuat persis sesuai dengan konsep retro-futu
 
 4. **Kategori Musik & Album Carousel**:
    - Filter pill (*Classic, 90s, New, Instrumental, Modern pop*).
-   - Kartu album berestetika monokrom hitam-putih (*Daily Chaos*, *Simple Things*, *Not so good*, *Disenchanted*) dalam carousel horizontal yang bisa digulir. Klik kartu untuk langsung memutar lagunya di turntable.
+   - Kartu album berestetika monokrom hitam-putih (*Daily Chaos*, *Simple Things*, *Not so good*, *Disenchanted*, *Can't Help Falling in Love*) dalam carousel horizontal yang bisa digulir. Klik kartu untuk langsung memutar lagunya di turntable.
 
 5. **Daftar Playlist Favorit & Navigasi**:
    - Sidebar navigasi minimalis dengan ikon fungsional.
@@ -66,4 +68,4 @@ music2d-player/
 └── README.md      # Panduan dokumentasi
 ```
 
-Untuk memakai file lagu sendiri, letakkan file MP3 di folder project, lalu daftarkan track beserta path `src`-nya di `synth.js` dan tambahkan kartu track di `index.html`.
+Lagu baru bisa ditambahkan melalui tombol **+ Add songs** tanpa mengedit kode. File disimpan di penyimpanan browser lokal (IndexedDB), tidak diunggah, dan tidak otomatis tersinkron ke browser atau perangkat lain. Menghapus data situs/browser juga menghapus lagu yang tersimpan. Tombol **×** menghapus lagu dari player; file asli di folder project tetap ada.

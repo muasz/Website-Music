@@ -110,12 +110,214 @@ class RetroAudioEngine {
         duration: 0,
         currentTime: 0,
         src: './My%20Chemical%20Romance%20-%20Disenchanted.mp3'
+      },
+      {
+        id: 'cant-help-falling-in-love',
+        title: "Can't Help Falling in Love",
+        artist: 'by Elvis Presley',
+        genre: 'Classic',
+        likes: '+ 0',
+        duration: 0,
+        currentTime: 0,
+        src: './Elvis%20Presley%20-%20Can%27t%20Help%20Falling%20in%20Love%20%28Lyrics%29.mp3'
       }
     ];
 
     this.currentChordStep = 0;
     this.beatStep = 0;
     this.stepTimer = null;
+  }
+
+  openLocalTrackDatabase() {
+    if (!window.indexedDB) {
+      return Promise.reject(new Error('IndexedDB is unavailable in this browser context.'));
+    }
+
+    return new Promise((resolve, reject) => {
+      const request = window.indexedDB.open('music2d-local-library', 2);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('tracks')) {
+          db.createObjectStore('tracks', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('hiddenTracks')) {
+          db.createObjectStore('hiddenTracks', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Could not open the local music library.'));
+    });
+  }
+
+  async loadLocalTracks() {
+    const db = await this.openLocalTrackDatabase();
+    let records;
+    let hiddenTrackIds;
+
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction(['tracks', 'hiddenTracks'], 'readonly');
+        const tracksRequest = transaction.objectStore('tracks').getAll();
+        const hiddenRequest = transaction.objectStore('hiddenTracks').getAll();
+        tracksRequest.onsuccess = () => {
+          records = tracksRequest.result;
+        };
+        hiddenRequest.onsuccess = () => {
+          hiddenTrackIds = hiddenRequest.result.map(record => record.id);
+        };
+        transaction.oncomplete = () => resolve();
+        tracksRequest.onerror = () => reject(tracksRequest.error || new Error('Could not read the local music library.'));
+        hiddenRequest.onerror = () => reject(hiddenRequest.error || new Error('Could not read removed-track records.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Reading the local music library was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+
+    const hiddenIds = new Set(hiddenTrackIds);
+    this.tracks = this.tracks.filter(track => !hiddenIds.has(track.id));
+
+    const loadedTracks = [];
+    records.forEach(record => {
+      if (this.tracks.some(track => track.id === record.id)) return;
+      if (!record.file || typeof record.file.size !== 'number') {
+        throw new Error(`Saved audio data is missing for "${record.title}".`);
+      }
+
+      const { file, ...metadata } = record;
+      const track = {
+        ...metadata,
+        src: URL.createObjectURL(file),
+        localFile: true
+      };
+      this.tracks.push(track);
+      loadedTracks.push(track);
+    });
+
+    return loadedTracks;
+  }
+
+  async saveHiddenTrackId(id) {
+    const db = await this.openLocalTrackDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('hiddenTracks', 'readwrite');
+        transaction.objectStore('hiddenTracks').put({ id });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error('Could not save the removed-track record.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Saving the removed-track record was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async deleteStoredLocalTrack(id) {
+    const db = await this.openLocalTrackDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('tracks', 'readwrite');
+        transaction.objectStore('tracks').delete(id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error('Could not delete the saved audio file.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Deleting the saved audio file was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async removeAudioTrack(id) {
+    const index = this.tracks.findIndex(track => track.id === id);
+    if (index === -1 || !this.tracks[index].src) {
+      throw new Error('The selected audio track could not be found.');
+    }
+
+    const track = this.tracks[index];
+    if (track.localFile) {
+      await this.deleteStoredLocalTrack(id);
+    } else {
+      await this.saveHiddenTrackId(id);
+    }
+
+    const wasCurrent = index === this.currentTrackIndex;
+    if (wasCurrent) this.stop();
+
+    if (this.audioTrackId === id && this.audio) {
+      this.audio.pause();
+      this.audioTrackId = null;
+      this.audio.removeAttribute('src');
+      this.audio.load();
+    }
+    if (track.localFile) URL.revokeObjectURL(track.src);
+
+    this.tracks.splice(index, 1);
+    if (index < this.currentTrackIndex) {
+      this.currentTrackIndex--;
+    } else if (wasCurrent) {
+      this.currentTrackIndex = Math.min(index, this.tracks.length - 1);
+    }
+
+    const activeTrack = this.getCurrentTrack();
+    this.trackTime = activeTrack.currentTime || 0;
+    this.trackDuration = activeTrack.duration || 0;
+    this.currentChordStep = 0;
+    this.beatStep = 0;
+    return { track, activeTrack, wasCurrent };
+  }
+
+  async addLocalTrack(file) {
+    if (!file || typeof file.name !== 'string') {
+      throw new Error('Choose an audio file to add.');
+    }
+    if (!file.type.startsWith('audio/') && !/\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i.test(file.name)) {
+      throw new Error(`"${file.name}" is not a supported audio file.`);
+    }
+
+    const filename = file.name.replace(/\.[^.]+$/, '');
+    const parts = filename.split(/\s+-\s+/);
+    const title = parts.length > 1 ? parts.slice(1).join(' - ') : filename;
+    const artist = parts.length > 1 ? `by ${parts[0]}` : 'by Local Library';
+    const idPart = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const record = {
+      id: `local-${idPart}`,
+      title,
+      artist,
+      genre: 'Local',
+      likes: '+ 0',
+      duration: 0,
+      currentTime: 0,
+      file
+    };
+
+    const db = await this.openLocalTrackDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('tracks', 'readwrite');
+        transaction.objectStore('tracks').put(record);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error('Could not save this audio file.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Saving this audio file was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+
+    const track = {
+      id: record.id,
+      title: record.title,
+      artist: record.artist,
+      genre: record.genre,
+      likes: record.likes,
+      duration: record.duration,
+      currentTime: record.currentTime,
+      src: URL.createObjectURL(file),
+      localFile: true
+    };
+    this.tracks.push(track);
+    return track;
   }
 
   /**

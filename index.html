@@ -329,7 +329,8 @@
             <!-- Music Categories Header -->
             <div class="section-header">
               <h2 class="pixel-text section-title">Music<br>Categories</h2>
-              <a href="#" class="view-all-link pixel-text" id="viewAllCategories">View all</a>
+              <button class="view-all-link pixel-text add-track-btn" id="addTrackBtn" type="button" title="Add audio files from your computer">+ Add songs</button>
+              <input id="trackFileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm" multiple hidden>
             </div>
 
             <!-- Categories Horizontal Pills -->
@@ -414,6 +415,24 @@
                 <div class="card-info">
                   <h3 class="card-title">Disenchanted</h3>
                   <p class="card-artist">by My Chemical Romance</p>
+                </div>
+              </article>
+
+              <!-- Card 5: Can't Help Falling in Love -->
+              <article class="album-card" data-track-id="cant-help-falling-in-love">
+                <div class="card-art-frame">
+                  <div class="card-img art-circle-silhouette">
+                    <div class="art-overlay-glitch"></div>
+                    <button class="card-quick-play" title="Play Can't Help Falling in Love">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-info">
+                  <h3 class="card-title">Can't Help Falling in Love</h3>
+                  <p class="card-artist">by Elvis Presley</p>
                 </div>
               </article>
 
