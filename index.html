@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MUSIC2D — Retro Vinyl Audio Player</title>
+  <!-- Google Fonts for authentic retro pixel aesthetic & clean UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background grain / dark backdrop -->
+  <div class="backdrop">
+    
+    <!-- Main Floating Player Shell (Matte Silver Device) -->
+    <main class="player-chassis" id="playerChassis">
+      
+      <!-- Top Header Navigation -->
+      <header class="top-nav">
+        <!-- Logo -->
+        <div class="brand-logo" id="brandLogo">
+          <span class="pixel-text logo-text">MUSIC2D</span>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-container">
+          <div class="search-bar">
+            <svg class="nav-icon search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="searchInput" placeholder="Search for songs, artists..." autocomplete="off">
+            <button class="clear-search hidden" id="clearSearchBtn">&times;</button>
+          </div>
+        </div>
+
+        <!-- Top Right Utility Actions -->
+        <div class="top-actions">
+          <button class="action-btn" id="soundFxToggle" title="Toggle Realistic Vinyl Crackle Sound FX" aria-label="Vinyl sound effect">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+            </svg>
+            <span class="badge-dot"></span>
+          </button>
+
+          <button class="action-btn" id="notifBtn" title="Notifications" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </button>
+
+          <!-- User Profile Avatar -->
+          <div class="avatar-frame" id="userProfile" title="Profile: 33 RPM Collector">
+            <div class="pixel-avatar">
+              <div class="pixel-hair"></div>
+              <div class="pixel-face">
+                <div class="eye left"></div>
+                <div class="eye right"></div>
+                <div class="glasses"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Layout Body -->
+      <div class="main-body">
+        
+        <!-- Far-Left Mini Vertical Icon Sidebar -->
+        <aside class="sidebar-icons">
+          <button class="side-btn active" data-tab="home" title="Home" aria-label="Home">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+          </button>
+
+          <button class="side-btn" data-tab="favorites" title="Favorites" aria-label="Favorites">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
+
+          <button class="side-btn" data-tab="tracks" title="Tracks" aria-label="Tracks">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3" fill="currentColor"></circle>
+              <circle cx="18" cy="16" r="3" fill="currentColor"></circle>
+            </svg>
+          </button>
+
+          <button class="side-btn" data-tab="vinyl" title="Turntable Focus" aria-label="Turntable">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+              <circle cx="12" cy="12" r="6" stroke-dasharray="2 3"></circle>
+            </svg>
+          </button>
+
+          <button class="side-btn" data-tab="equalizer" title="Equalizer & Pitch" aria-label="Settings / Equalizer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+          </button>
+
+          <button class="side-btn" data-tab="tags" title="Tags & Genres" aria-label="Tags">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+              <line x1="7" y1="7" x2="7.01" y2="7"></line>
+            </svg>
+          </button>
+        </aside>
+
+        <!-- Main Content Area: 2 Columns (Left: Turntable + Track, Right: Categories + Carousel + Playlists) -->
+        <div class="content-grid">
+          
+          <!-- LEFT COLUMN: Skeuomorphic Vinyl Turntable & Now Playing Controls -->
+          <section class="player-column">
+            
+            <!-- Metallic Turntable Deck -->
+            <div class="turntable-deck" id="turntableDeck">
+              <!-- Corner Hex Screws -->
+              <div class="deck-screw top-left"></div>
+              <div class="deck-screw top-right"></div>
+              <div class="deck-screw bottom-left"></div>
+              <div class="deck-screw bottom-right"></div>
+
+              <!-- Power / Speed Strobe Status Indicator -->
+              <div class="strobe-status active" id="strobeIndicator" title="Turntable Strobe Power">
+                <span class="strobe-led"></span>
+              </div>
+
+              <!-- Turntable Platter Outer Well -->
+              <div class="platter-well">
+                <!-- Strobe Dots Ring around platter edge -->
+                <div class="platter-rim">
+                  
+                  <!-- Rotating Vinyl Disc -->
+                  <div class="vinyl-record" id="vinylRecord">
+                    <!-- Concentric Grooves -->
+                    <div class="vinyl-groove g-1"></div>
+                    <div class="vinyl-groove g-2"></div>
+                    <div class="vinyl-groove g-3"></div>
+                    <div class="vinyl-groove g-4"></div>
+                    <div class="vinyl-groove g-5"></div>
+                    <!-- Specular Light Sheen Reflection -->
+                    <div class="vinyl-sheen"></div>
+                    
+                    <!-- Center Vinyl Label -->
+                    <div class="vinyl-center-label" id="vinylCenterLabel">
+                      <div class="label-half top-half">
+                        <span class="label-code" id="labelCode">LP-204</span>
+                      </div>
+                      <div class="label-half bottom-half">
+                        <span class="label-rpm">33⅓ RPM</span>
+                      </div>
+                      <!-- Spindle hole with brass rim -->
+                      <div class="spindle-hole"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tonearm Assembly -->
+              <div class="tonearm-assembly" id="tonearmAssembly">
+                <!-- Pivot Gimbal Base -->
+                <div class="gimbal-base">
+                  <div class="gimbal-ring">
+                    <div class="counterweight"></div>
+                    <div class="anti-skate-dial"></div>
+                  </div>
+                </div>
+
+                <!-- Arm Lever & Wand -->
+                <div class="tonearm-wand" id="tonearmWand">
+                  <div class="arm-tube"></div>
+                  <div class="cartridge-headshell">
+                    <div class="finger-lift"></div>
+                    <div class="stylus-needle" id="stylusNeedle"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Turntable Controls on Deck -->
+              <!-- Pitch Slider / Tempo Fader -->
+              <div class="pitch-slider-container" title="Pitch / Speed Control">
+                <div class="pitch-scale">
+                  <span>+8</span>
+                  <span>0</span>
+                  <span>-8</span>
+                </div>
+                <div class="pitch-track">
+                  <input type="range" id="pitchSlider" min="0.8" max="1.2" step="0.01" value="1.0" orient="vertical">
+                  <div class="pitch-knob-visual" id="pitchKnobVisual"></div>
+                </div>
+              </div>
+
+              <!-- Power / 33-45 RPM & Start-Stop Buttons on Deck -->
+              <div class="deck-controls-bottom">
+                <button class="deck-dial-btn" id="turntablePowerBtn" title="Turntable Motor Power (Start/Stop)">
+                  <div class="dial-dot"></div>
+                </button>
+                <div class="deck-switch-group">
+                  <button class="deck-rect-btn active" id="rpm33Btn">33</button>
+                  <button class="deck-rect-btn" id="rpm45Btn">45</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Now Playing Meta & Interactive Controls -->
+            <div class="now-playing-panel">
+              
+              <!-- Track Title & Comments Counter -->
+              <div class="track-header">
+                <div class="title-wrap">
+                  <h1 class="pixel-text track-title" id="currentTrackTitle">The Suffering</h1>
+                </div>
+                
+                <!-- Comments / Likes Badge -->
+                <button class="comment-badge" id="likeCounterBtn" title="Likes / Listeners">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span class="badge-num" id="likeCount">+ 392</span>
+                </button>
+              </div>
+
+              <!-- Genre Pill & Artist Info -->
+              <div class="track-sub-info">
+                <span class="genre-pill pixel-text" id="currentTrackGenre">Classic</span>
+                <span class="track-artist-label" id="currentTrackArtist">by Coheed & Cambria</span>
+              </div>
+
+              <!-- Waveform Progress Bar with Timers -->
+              <div class="waveform-container" id="waveformContainer">
+                <span class="time-label current-time mono-text" id="currentTimeLabel">1:54</span>
+                
+                <!-- Dynamic Interactive Waveform Bars -->
+                <div class="waveform-bars" id="waveformBars" title="Click anywhere to seek">
+                  <!-- Bars are dynamically injected via JS, or fall back to CSS bars -->
+                </div>
+
+                <span class="time-label total-time mono-text" id="totalTimeLabel">3:35</span>
+              </div>
+
+              <!-- Main Playback Controls Bar -->
+              <div class="playback-controls">
+                <!-- Repeat / Expand -->
+                <button class="ctrl-btn" id="repeatBtn" title="Repeat Track" aria-label="Repeat">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="17 1 21 5 17 9"></polyline>
+                    <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                    <polyline points="7 23 3 19 7 15"></polyline>
+                    <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                  </svg>
+                </button>
+
+                <!-- Previous -->
+                <button class="ctrl-btn" id="prevBtn" title="Previous Track" aria-label="Previous">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                  </svg>
+                </button>
+
+                <!-- Big Primary Play/Pause Button -->
+                <button class="main-play-btn" id="masterPlayBtn" title="Play / Pause" aria-label="Play/Pause">
+                  <!-- Pause Icon (Default in screenshot) -->
+                  <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="5" width="4" height="14" rx="1"></rect>
+                    <rect x="14" y="5" width="4" height="14" rx="1"></rect>
+                  </svg>
+                  <!-- Play Icon -->
+                  <svg class="icon-play hidden" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="7 4 19 12 7 20 7 4"></polygon>
+                  </svg>
+                </button>
+
+                <!-- Next -->
+                <button class="ctrl-btn" id="nextBtn" title="Next Track" aria-label="Next">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                  </svg>
+                </button>
+
+                <!-- Shuffle -->
+                <button class="ctrl-btn" id="shuffleBtn" title="Shuffle Mode" aria-label="Shuffle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 3 21 3 21 8"></polyline>
+                    <line x1="4" y1="20" x2="21" y2="3"></line>
+                    <polyline points="21 16 21 21 16 21"></polyline>
+                    <line x1="15" y1="15" x2="21" y2="21"></line>
+                    <line x1="4" y1="4" x2="9" y2="9"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Audio Engine Controls (Volume / Lo-Fi Warmth / Vinyl Crackle) -->
+              <div class="audio-enhancements">
+                <div class="enhancement-pill" id="cracklePill" title="Click to toggle realistic vinyl needle crackle">
+                  <span class="pill-dot active" id="crackleLed"></span>
+                  <span class="pill-txt">VINYL CRACKLE: ON</span>
+                </div>
+                <div class="volume-slider-wrap">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                  </svg>
+                  <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.85" title="Master Volume">
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- RIGHT COLUMN: Categories, Album Cards Carousel, & Favorite Playlists -->
+          <section class="explore-column">
+            
+            <!-- Music Categories Header -->
+            <div class="section-header">
+              <h2 class="pixel-text section-title">Music<br>Categories</h2>
+              <a href="#" class="view-all-link pixel-text" id="viewAllCategories">View all</a>
+            </div>
+
+            <!-- Categories Horizontal Pills -->
+            <div class="category-pills" id="categoryPillsList">
+              <button class="cat-pill active pixel-text" data-category="classic">Classic</button>
+              <button class="cat-pill pixel-text" data-category="90s">90s</button>
+              <button class="cat-pill pixel-text" data-category="new">New</button>
+              <button class="cat-pill pixel-text" data-category="instrumental">Instrumental</button>
+              <button class="cat-pill pixel-text" data-category="modern">Modern pop</button>
+            </div>
+
+            <!-- Album Cards Row / Carousel -->
+            <div class="album-cards-row" id="albumCardsRow" role="region" aria-label="Album tracks" tabindex="0">
+              
+              <!-- Card 1: Daily Chaos -->
+              <article class="album-card" data-track-id="daily-chaos">
+                <div class="card-art-frame">
+                  <div class="card-img art-striped-shirt">
+                    <!-- Stylized SVG silhouette / artwork in theme -->
+                    <div class="art-overlay-glitch"></div>
+                    <button class="card-quick-play" title="Play Daily Chaos">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-info">
+                  <h3 class="card-title">Daily Chaos</h3>
+                  <p class="card-artist">by Emily Bryan</p>
+                </div>
+              </article>
+
+              <!-- Card 2: Simple Things -->
+              <article class="album-card active-card" data-track-id="the-suffering">
+                <div class="card-art-frame">
+                  <div class="card-img art-graffiti-live">
+                    <div class="art-overlay-glitch"></div>
+                    <button class="card-quick-play" title="Play Simple Things">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-info">
+                  <h3 class="card-title">Simple Things</h3>
+                  <p class="card-artist">by Ryan Poppin</p>
+                </div>
+              </article>
+
+              <!-- Card 3: Not so good -->
+              <article class="album-card" data-track-id="not-so-good">
+                <div class="card-art-frame">
+                  <div class="card-img art-circle-silhouette">
+                    <div class="art-overlay-glitch"></div>
+                    <button class="card-quick-play" title="Play Not so good">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-info">
+                  <h3 class="card-title">Not so good</h3>
+                  <p class="card-artist">by Bryan Thomas</p>
+                </div>
+              </article>
+
+              <!-- Card 4: Disenchanted -->
+              <article class="album-card" data-track-id="disenchanted">
+                <div class="card-art-frame">
+                  <div class="card-img art-graffiti-live">
+                    <div class="art-overlay-glitch"></div>
+                    <button class="card-quick-play" title="Play Disenchanted">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-info">
+                  <h3 class="card-title">Disenchanted</h3>
+                  <p class="card-artist">by My Chemical Romance</p>
+                </div>
+              </article>
+
+            </div>
+
+            <!-- Favorite Playlists Section -->
+            <div class="playlists-section">
+              <h3 class="playlists-title">Favorite Playlists <span class="playlist-count">(4)</span></h3>
+              
+              <div class="playlist-list" id="playlistList">
+                
+                <!-- Playlist Item 1 -->
+                <div class="playlist-row" data-playlist-id="eren-1">
+                  <div class="playlist-thumb">
+                    <div class="avatar-silhouette"></div>
+                  </div>
+                  <div class="playlist-meta">
+                    <h4 class="playlist-name">Best of Eren</h4>
+                    <p class="playlist-count-label">32 songs in this list</p>
+                  </div>
+                  <button class="playlist-play-btn" title="Play Playlist" aria-label="Play Best of Eren">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"></polygon>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Playlist Item 2 -->
+                <div class="playlist-row" data-playlist-id="eren-2">
+                  <div class="playlist-thumb">
+                    <div class="avatar-silhouette"></div>
+                  </div>
+                  <div class="playlist-meta">
+                    <h4 class="playlist-name">Best of Eren</h4>
+                    <p class="playlist-count-label">32 songs in this list</p>
+                  </div>
+                  <button class="playlist-play-btn" title="Play Playlist" aria-label="Play Best of Eren">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"></polygon>
+                    </svg>
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+          </section>
+
+        </div>
+      </div>
+      
+      <!-- Interactive Notification Toast -->
+      <div class="toast-popup hidden" id="toastPopup">
+        <span class="toast-dot"></span>
+        <span class="toast-msg" id="toastMsg">Now playing: The Suffering</span>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Audio Synthesis & Logic Scripts -->
+  <script src="synth.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
