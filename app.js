@@ -9,7 +9,9 @@
 // ---------------------------------------------------------------------------
 let _ytPlayer = null;
 let _ytPlayerReady = false;
+let _ytInstanceReady = false;
 let _ytCurrentVideoId = null;
+let _ytPendingAutoplay = false;
 let _ytTimeInterval = null;
 
 // Called automatically by the YT IFrame API script after it loads
@@ -189,15 +191,42 @@ document.addEventListener('DOMContentLoaded', () => {
    * autoplay=true  → starts playback immediately (or as soon as the player is ready).
    * autoplay=false → cues the video without playing.
    */
+  function getClosestYtRate(targetRate) {
+    const supported = (_ytPlayer && typeof _ytPlayer.getAvailablePlaybackRates === 'function')
+      ? _ytPlayer.getAvailablePlaybackRates()
+      : [];
+    const rates = supported.length ? supported : [0.5, 0.75, 1, 1.25, 1.5, 2];
+    return rates.reduce((prev, curr) =>
+      Math.abs(curr - targetRate) < Math.abs(prev - targetRate) ? curr : prev
+    );
+  }
+
+  function syncYtSettings() {
+    if (!_ytPlayer || !_ytInstanceReady) return;
+    if (typeof _ytPlayer.setVolume === 'function') {
+      const vol = Math.round(parseFloat(volumeSlider.value) * 100);
+      _ytPlayer.setVolume(Math.max(0, Math.min(100, vol)));
+    }
+    if (typeof _ytPlayer.setPlaybackRate === 'function') {
+      const pitchRate = parseFloat(pitchSlider.value) || 1.0;
+      const rpmFactor = currentRpm === 45 ? 1.35 : 1.0;
+      _ytPlayer.setPlaybackRate(getClosestYtRate(pitchRate * rpmFactor));
+    }
+  }
+
   function ensureYtPlayer(videoId, autoplay) {
+    _ytPendingAutoplay = autoplay;
+
     if (!_ytPlayerReady) {
       // API not ready yet — retry shortly
-      setTimeout(() => ensureYtPlayer(videoId, autoplay), 300);
+      setTimeout(() => ensureYtPlayer(videoId, _ytPendingAutoplay), 300);
       return;
     }
 
     if (!_ytPlayer) {
       // First time: create the player inside the hidden container
+      _ytInstanceReady = false;
+      _ytCurrentVideoId = videoId;
       _ytPlayer = new YT.Player('youtubePlayerContainer', {
         height: '180',
         width: '320',
@@ -207,13 +236,29 @@ document.addEventListener('DOMContentLoaded', () => {
           controls: 0,
           disablekb: 1,
           rel: 0,
-          playsinline: 1
+          playsinline: 1,
+          origin: window.location.protocol.startsWith('http') ? window.location.origin : undefined
         },
         events: {
-          onReady: (e) => { if (autoplay) e.target.playVideo(); },
-          onStateChange: onYtStateChange
+          onReady: (e) => {
+            _ytInstanceReady = true;
+            syncYtSettings();
+            if (_ytCurrentVideoId && _ytCurrentVideoId !== videoId) {
+              if (_ytPendingAutoplay) {
+                e.target.loadVideoById(_ytCurrentVideoId);
+              } else {
+                e.target.cueVideoById(_ytCurrentVideoId);
+              }
+            } else if (_ytPendingAutoplay) {
+              e.target.playVideo();
+            }
+          },
+          onStateChange: onYtStateChange,
+          onError: onYtError
         }
       });
+    } else if (!_ytInstanceReady) {
+      // Player created but onReady hasn't fired yet — onReady will pick up _ytCurrentVideoId
       _ytCurrentVideoId = videoId;
     } else if (_ytCurrentVideoId !== videoId) {
       // Different video — load it
@@ -229,6 +274,22 @@ document.addEventListener('DOMContentLoaded', () => {
         _ytPlayer.playVideo();
       }
     }
+  }
+
+  function onYtError(event) {
+    stopYtTimeSync();
+    setPlayState(false);
+    const messages = {
+      2: 'Invalid YouTube video link.',
+      5: 'YouTube player failed to play this video.',
+      100: 'YouTube video not found or private.',
+      101: 'This YouTube video cannot be embedded here.',
+      150: 'This YouTube video cannot be embedded here.'
+    };
+    const fallback = window.location.protocol === 'file:'
+      ? 'YouTube embeds require http://localhost (not file://).'
+      : `YouTube playback error (code ${event.data}).`;
+    showToast(messages[event.data] || fallback);
   }
 
   /** Handles YT player state changes (ended, etc.) */
@@ -247,8 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setPlayState(true);
       }
     }
-    // YT.PlayerState.PLAYING = 1 — sync duration once known
+    // YT.PlayerState.PLAYING = 1 — sync duration and speed/volume once playing
     if (event.data === 1 && _ytPlayer) {
+      syncYtSettings();
       const dur = _ytPlayer.getDuration();
       if (dur > 0) {
         engine.trackDuration = dur;
@@ -375,6 +437,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Cue or switch video in the hidden YT player
       ensureYtPlayer(track.youtubeVideoId, autoplayYoutube);
       if (autoplayYoutube) startYtTimeSync();
+    } else {
+      stopYtTimeSync();
+      if (_ytPlayer && _ytInstanceReady && typeof _ytPlayer.pauseVideo === 'function') {
+        _ytPlayer.pauseVideo();
+      }
     }
 
     updateProgressUI();
@@ -419,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
   pitchSlider.addEventListener('input', (e) => {
     const rate = parseFloat(e.target.value);
     engine.setPlaybackRate(rate);
+    syncYtSettings();
 
     // Adjust CSS animation duration to match realistic vinyl spin speed
     const baseDuration = currentRpm === 45 ? 1.333 : 1.818;
@@ -427,7 +495,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const percentText = Math.round((rate - 1.0) * 100);
     const sign = percentText > 0 ? '+' : '';
-    showToast(`Pitch: ${sign}${percentText}% (${rate.toFixed(2)}x)`);
+    const track = engine.getCurrentTrack();
+    if (track && track.youtubeVideoId) {
+      const rpmFactor = currentRpm === 45 ? 1.35 : 1.0;
+      const ytRate = getClosestYtRate(rate * rpmFactor);
+      showToast(`YouTube Speed: ${ytRate}x`);
+    } else {
+      showToast(`Pitch: ${sign}${percentText}% (${rate.toFixed(2)}x)`);
+    }
   });
 
   // 33 vs 45 RPM Switch
@@ -436,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rpm33Btn.classList.add('active');
     rpm45Btn.classList.remove('active');
     engine.setRPM(33);
+    syncYtSettings();
     vinylRecord.classList.remove('spinning-fast');
     if (isPlaying) vinylRecord.classList.add('spinning');
     showToast('Speed: 33⅓ RPM (Standard LP)');
@@ -446,6 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rpm45Btn.classList.add('active');
     rpm33Btn.classList.remove('active');
     engine.setRPM(45);
+    syncYtSettings();
     vinylRecord.classList.remove('spinning');
     if (isPlaying) vinylRecord.classList.add('spinning-fast');
     showToast('Speed: 45 RPM (Single / Maxi)');
@@ -466,6 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   volumeSlider.addEventListener('input', (e) => {
     engine.setVolume(e.target.value);
+    syncYtSettings();
   });
 
   likeCounterBtn.addEventListener('click', () => {
