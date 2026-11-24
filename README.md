@@ -16,8 +16,9 @@ Web audio player yang didesain dan dibuat persis sesuai dengan konsep retro-futu
 2. **Mesin Audio (Web Audio API)**:
    - Memutar track synth Lo-Fi procedural bawaan dan file MP3 lokal.
    - Track *Disenchanted* dan *Can't Help Falling in Love* memakai file MP3 lokal di folder project.
-   - Gunakan tombol **+ Add songs** untuk memilih satu atau beberapa file audio; lagu tersimpan di browser ini dan tetap tersedia setelah halaman dimuat ulang.
-   - Tombol **×** pada kartu lagu menghapusnya dari player setelah konfirmasi; file asli di komputer tidak ikut dihapus.
+   - Gunakan tombol **+ Add files** untuk memilih satu atau beberapa file audio; lagu tersimpan di browser ini dan tetap tersedia setelah halaman dimuat ulang, termasuk saat offline.
+   - Gunakan tombol **+ YouTube link** untuk menyimpan link video YouTube. Pemutaran menggunakan player resmi YouTube dan membutuhkan internet; link tidak mengunduh atau menyimpan audio offline. Sebagian video mungkin tidak mengizinkan pemutaran embed.
+   - Kartu lagu menandai sumbernya sebagai **OFFLINE** atau **ONLINE**. Tombol **×** menghapus lagu atau link dari library browser setelah konfirmasi; file asli maupun video YouTube tidak ikut dihapus.
    - **Efek Suara Gesekan Jarum Vinyl (*Vinyl Crackle*)**: Fitur suara kresek-kresek khas piringan hitam analog vintage yang dapat dinyalakan/dimatikan dengan satu tombol.
    - **Efek Deselerasi Motor Turntable**: Saat dihentikan (*Pause*), suara melambat dengan efek *pitch-glide down* khas piringan analog yang mati.
 
@@ -50,9 +51,11 @@ Klik ganda file `index.html` di penjelajah berkas Windows (File Explorer):
 Jalankan server lokal via PowerShell / Command Prompt:
 ```powershell
 cd C:\Users\LIFE\.gemini\antigravity\scratch\music2d-player
-python -m http.server 8000
+python -m http.server 8000 --bind 0.0.0.0
 ```
 Lalu buka [http://localhost:8000](http://localhost:8000) di browser Anda.
+
+Untuk membuka dari HP, sambungkan HP dan komputer ke Wi-Fi yang sama, lalu buka `http://ALAMAT-IP-KOMPUTER:8000` di browser HP. Cari alamat IPv4 komputer dengan perintah `ipconfig`; jangan gunakan `localhost` atau `127.0.0.1` di HP karena alamat tersebut menunjuk ke HP itu sendiri. Jika diminta, izinkan Python melewati Windows Firewall pada jaringan privat.
 
 ---
 
@@ -68,4 +71,4 @@ music2d-player/
 └── README.md      # Panduan dokumentasi
 ```
 
-Lagu baru bisa ditambahkan melalui tombol **+ Add songs** tanpa mengedit kode. File disimpan di penyimpanan browser lokal (IndexedDB), tidak diunggah, dan tidak otomatis tersinkron ke browser atau perangkat lain. Menghapus data situs/browser juga menghapus lagu yang tersimpan. Tombol **×** menghapus lagu dari player; file asli di folder project tetap ada.
+Lagu file ditambahkan melalui **+ Add files** dan disimpan di penyimpanan browser lokal (IndexedDB), tidak diunggah. Link YouTube ditambahkan melalui **+ YouTube link** dan hanya link beserta metadata opsional yang disimpan; pemutaran dilakukan online melalui YouTube. Keduanya tidak otomatis tersinkron ke browser atau perangkat lain. Menghapus data situs/browser juga menghapus lagu dan link yang tersimpan. Tombol **×** menghapus entri dari player; file asli di folder project dan video YouTube tetap ada.

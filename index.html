@@ -128,7 +128,6 @@
           
           <!-- LEFT COLUMN: Skeuomorphic Vinyl Turntable & Now Playing Controls -->
           <section class="player-column">
-            
             <!-- Metallic Turntable Deck -->
             <div class="turntable-deck" id="turntableDeck">
               <!-- Corner Hex Screws -->
@@ -218,6 +217,9 @@
                 </div>
               </div>
             </div>
+
+            <!-- YouTube IFrame hidden player: always present but invisible so API can play audio -->
+            <div id="youtubePlayerContainer" style="position:fixed;bottom:0;right:0;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-1;"></div>
 
             <!-- Now Playing Meta & Interactive Controls -->
             <div class="now-playing-panel">
@@ -329,8 +331,11 @@
             <!-- Music Categories Header -->
             <div class="section-header">
               <h2 class="pixel-text section-title">Music<br>Categories</h2>
-              <button class="view-all-link pixel-text add-track-btn" id="addTrackBtn" type="button" title="Add audio files from your computer">+ Add songs</button>
-              <input id="trackFileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm" multiple hidden>
+              <div class="track-add-actions">
+                <input id="trackFileInput" class="track-file-input" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm" multiple>
+                <label class="view-all-link pixel-text add-track-btn" id="addTrackBtn" for="trackFileInput">+ Add files</label>
+                <button class="view-all-link pixel-text youtube-add-btn" id="addYoutubeTrackBtn" type="button">+ YouTube link</button>
+              </div>
             </div>
 
             <!-- Categories Horizontal Pills -->
@@ -486,6 +491,23 @@
         </div>
       </div>
       
+      <dialog class="youtube-track-dialog" id="youtubeTrackDialog">
+        <form class="youtube-track-form" id="youtubeTrackForm">
+          <h2 class="pixel-text">Add YouTube song</h2>
+          <label for="youtubeUrlInput">YouTube video link</label>
+          <input id="youtubeUrlInput" name="url" type="url" placeholder="https://youtu.be/..." required>
+          <label for="youtubeTitleInput">Song title (optional)</label>
+          <input id="youtubeTitleInput" name="title" type="text" maxlength="120" placeholder="Title">
+          <label for="youtubeArtistInput">Artist or channel (optional)</label>
+          <input id="youtubeArtistInput" name="artist" type="text" maxlength="120" placeholder="Artist / channel">
+          <p>Plays online through YouTube. This link is saved in this browser only; some videos may not allow embedding.</p>
+          <div class="youtube-dialog-actions">
+            <button type="button" class="youtube-dialog-cancel" id="cancelYoutubeTrackBtn">Cancel</button>
+            <button type="submit" class="youtube-dialog-submit">Add link</button>
+          </div>
+        </form>
+      </dialog>
+
       <!-- Interactive Notification Toast -->
       <div class="toast-popup hidden" id="toastPopup">
         <span class="toast-dot"></span>
@@ -495,6 +517,8 @@
     </main>
   </div>
 
+  <!-- YouTube IFrame Player API (loads async, needed for YouTube link playback) -->
+  <script src="https://www.youtube.com/iframe_api"></script>
   <!-- Audio Synthesis & Logic Scripts -->
   <script src="synth.js"></script>
   <script src="app.js"></script>

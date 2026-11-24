@@ -4,6 +4,17 @@
  * category filtering, playlist selection, and user feedback.
  */
 
+// ---------------------------------------------------------------------------
+// YouTube IFrame API — module-level globals accessible everywhere in this file
+// ---------------------------------------------------------------------------
+let _ytPlayer = null;
+let _ytPlayerReady = false;
+let _ytCurrentVideoId = null;
+let _ytTimeInterval = null;
+
+// Called automatically by the YT IFrame API script after it loads
+window.onYouTubeIframeAPIReady = function () { _ytPlayerReady = true; };
+
 document.addEventListener('DOMContentLoaded', () => {
   const engine = window.audioEngine;
 
@@ -24,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const pitchSlider = document.getElementById('pitchSlider');
   const rpm33Btn = document.getElementById('rpm33Btn');
   const rpm45Btn = document.getElementById('rpm45Btn');
+  const playerColumn = document.querySelector('.player-column');
+  const youtubePlayerContainer = document.getElementById('youtubePlayerContainer');
 
   const currentTrackTitle = document.getElementById('currentTrackTitle');
   const currentTrackArtist = document.getElementById('currentTrackArtist');
@@ -44,7 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const categoryPills = document.querySelectorAll('.cat-pill');
   const albumCardsRow = document.getElementById('albumCardsRow');
   const addTrackBtn = document.getElementById('addTrackBtn');
+  const addYoutubeTrackBtn = document.getElementById('addYoutubeTrackBtn');
   const trackFileInput = document.getElementById('trackFileInput');
+  const youtubeTrackDialog = document.getElementById('youtubeTrackDialog');
+  const youtubeTrackForm = document.getElementById('youtubeTrackForm');
+  const youtubeUrlInput = document.getElementById('youtubeUrlInput');
+  const youtubeTitleInput = document.getElementById('youtubeTitleInput');
+  const youtubeArtistInput = document.getElementById('youtubeArtistInput');
+  const cancelYoutubeTrackBtn = document.getElementById('cancelYoutubeTrackBtn');
   const playlistRows = document.querySelectorAll('.playlist-row');
   const toastPopup = document.getElementById('toastPopup');
   const toastMsg = document.getElementById('toastMsg');
@@ -93,6 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         const percent = (i + 1) / TOTAL_BARS;
         engine.seek(percent);
+        // Also seek the YouTube player if applicable
+        if (engine.getCurrentTrack().youtubeVideoId && _ytPlayer && typeof _ytPlayer.seekTo === 'function') {
+          _ytPlayer.seekTo(engine.trackTime, true);
+        }
         updateProgressUI();
         showToast(`Seeked to ${formatTime(engine.trackTime)}`);
       });
@@ -152,11 +176,118 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================================================
   // PLAYBACK CONTROL LOGIC
   // ==========================================================================
+  function clearYoutubePlayer() {
+    // Visual layout reset only — keep the YT iframe in DOM so audio can keep running
+    playerColumn.classList.remove('youtube-active');
+    delete youtubePlayerContainer.dataset.videoId;
+  }
+
+  // ---- YouTube IFrame API helpers ----
+
+  /**
+   * Create or reuse the hidden YT player for the given videoId.
+   * autoplay=true  → starts playback immediately (or as soon as the player is ready).
+   * autoplay=false → cues the video without playing.
+   */
+  function ensureYtPlayer(videoId, autoplay) {
+    if (!_ytPlayerReady) {
+      // API not ready yet — retry shortly
+      setTimeout(() => ensureYtPlayer(videoId, autoplay), 300);
+      return;
+    }
+
+    if (!_ytPlayer) {
+      // First time: create the player inside the hidden container
+      _ytPlayer = new YT.Player('youtubePlayerContainer', {
+        height: '180',
+        width: '320',
+        videoId: videoId,
+        playerVars: {
+          autoplay: autoplay ? 1 : 0,
+          controls: 0,
+          disablekb: 1,
+          rel: 0,
+          playsinline: 1
+        },
+        events: {
+          onReady: (e) => { if (autoplay) e.target.playVideo(); },
+          onStateChange: onYtStateChange
+        }
+      });
+      _ytCurrentVideoId = videoId;
+    } else if (_ytCurrentVideoId !== videoId) {
+      // Different video — load it
+      if (autoplay) {
+        _ytPlayer.loadVideoById(videoId);  // loads and plays
+      } else {
+        _ytPlayer.cueVideoById(videoId);   // loads, does not play
+      }
+      _ytCurrentVideoId = videoId;
+    } else if (autoplay) {
+      // Same video, just ensure it's playing
+      if (typeof _ytPlayer.getPlayerState === 'function' && _ytPlayer.getPlayerState() !== 1) {
+        _ytPlayer.playVideo();
+      }
+    }
+  }
+
+  /** Handles YT player state changes (ended, etc.) */
+  function onYtStateChange(event) {
+    // YT.PlayerState.ENDED = 0
+    if (event.data === 0) {
+      stopYtTimeSync();
+      if (engine.isRepeat) {
+        _ytPlayer.seekTo(0, true);
+        setPlayState(true);
+      } else {
+        // Auto-advance to the next track
+        setPlayState(false);
+        const track = engine.nextTrack();
+        loadTrackMeta(track, false);
+        setPlayState(true);
+      }
+    }
+    // YT.PlayerState.PLAYING = 1 — sync duration once known
+    if (event.data === 1 && _ytPlayer) {
+      const dur = _ytPlayer.getDuration();
+      if (dur > 0) {
+        engine.trackDuration = dur;
+        const t = engine.getCurrentTrack();
+        if (t) t.duration = dur;
+        if (engine.onTrackDurationChange) engine.onTrackDurationChange();
+      }
+    }
+  }
+
+  /** Poll the YT player for current time and feed it into the engine so the
+   *  waveform progress bar stays in sync. */
+  function startYtTimeSync() {
+    stopYtTimeSync();
+    _ytTimeInterval = setInterval(() => {
+      if (_ytPlayer && typeof _ytPlayer.getCurrentTime === 'function') {
+        engine.trackTime = _ytPlayer.getCurrentTime() || 0;
+        const dur = _ytPlayer.getDuration();
+        if (dur > 0) {
+          engine.trackDuration = dur;
+          const t = engine.getCurrentTrack();
+          if (t) t.duration = dur;
+        }
+      }
+    }, 500);
+  }
+
+  function stopYtTimeSync() {
+    if (_ytTimeInterval) {
+      clearInterval(_ytTimeInterval);
+      _ytTimeInterval = null;
+    }
+  }
   function setPlayState(play) {
     isPlaying = play;
+    const track = engine.getCurrentTrack();
 
     if (isPlaying) {
-      // Turntable animation
+      // Turntable animation — runs for ALL track types including YouTube
       if (isTurntablePowered) {
         vinylRecord.classList.remove('paused');
         vinylRecord.classList.add(currentRpm === 45 ? 'spinning-fast' : 'spinning');
@@ -169,7 +300,12 @@ document.addEventListener('DOMContentLoaded', () => {
       iconPause.classList.remove('hidden');
       iconPlay.classList.add('hidden');
 
+      // engine.start() handles crackle + local audio (for YouTube: crackle only)
       engine.start();
+      if (track.youtubeVideoId) {
+        ensureYtPlayer(track.youtubeVideoId, true);
+        startYtTimeSync();
+      }
       requestAnimationFrame(animateWaveformFrequencies);
     } else {
       // Turntable paused
@@ -179,7 +315,11 @@ document.addEventListener('DOMContentLoaded', () => {
       iconPause.classList.add('hidden');
       iconPlay.classList.remove('hidden');
 
-      engine.stop();
+      if (track.youtubeVideoId) {
+        if (_ytPlayer && typeof _ytPlayer.pauseVideo === 'function') _ytPlayer.pauseVideo();
+        stopYtTimeSync();
+      }
+      engine.stop(); // fades crackle + pauses local audio
     }
   }
 
@@ -191,17 +331,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Previous & Next Track
-  prevBtn.addEventListener('click', () => {
-    const track = engine.prevTrack();
-    loadTrackMeta(track);
+  function navigateTrack(direction) {
+    const shouldResume = isPlaying;
+    setPlayState(false);
+    const track = direction === 'previous' ? engine.prevTrack() : engine.nextTrack();
+    loadTrackMeta(track, false);
+    if (shouldResume) setPlayState(true);
     showToast(`Track: ${track.title}`);
-  });
+  }
 
-  nextBtn.addEventListener('click', () => {
-    const track = engine.nextTrack();
-    loadTrackMeta(track);
-    showToast(`Track: ${track.title}`);
-  });
+  prevBtn.addEventListener('click', () => navigateTrack('previous'));
+  nextBtn.addEventListener('click', () => navigateTrack('next'));
 
   repeatBtn.addEventListener('click', () => {
     isRepeat = !isRepeat;
@@ -217,26 +357,34 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Track Meta Update
-  function loadTrackMeta(track) {
+  function loadTrackMeta(track, autoplayYoutube = false) {
     currentTrackTitle.textContent = track.title;
     currentTrackArtist.textContent = track.artist;
     currentTrackGenre.textContent = track.genre;
     likeCount.textContent = track.likes;
     labelCode.textContent = `LP-${Math.floor(100 + Math.random() * 899)}`;
 
+    const isYoutubeTrack = Boolean(track.youtubeVideoId);
+    // Always show the turntable — never switch to YouTube video layout
+    playerColumn.classList.remove('youtube-active');
+
+    if (isYoutubeTrack) {
+      // Reset engine time display; actual duration comes from YT player
+      engine.trackTime = 0;
+      engine.trackDuration = 0;
+      // Cue or switch video in the hidden YT player
+      ensureYtPlayer(track.youtubeVideoId, autoplayYoutube);
+      if (autoplayYoutube) startYtTimeSync();
+    }
+
     updateProgressUI();
 
     // Highlight corresponding album card if present
     getAlbumCards().forEach(card => {
-      const cardTitle = card.querySelector('.card-title')?.textContent.trim();
-      if (cardTitle && cardTitle.toLowerCase() === track.title.toLowerCase()) {
-        card.classList.add('active-card');
-      } else {
-        card.classList.remove('active-card');
-      }
+      card.classList.toggle('active-card', card.dataset.trackId === track.id);
     });
 
-    if (isPlaying) {
+    if (isPlaying && !isYoutubeTrack) {
       engine.start();
     }
   }
@@ -360,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function addLocalTrackCard(track) {
+  function addSavedTrackCard(track) {
     const template = albumCardsRow.querySelector('.album-card');
     if (!template) {
       throw new Error('Cannot add a track card because the album carousel is empty.');
@@ -368,11 +516,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const card = template.cloneNode(true);
     card.dataset.trackId = track.id;
-    card.dataset.localTrack = 'true';
+    card.dataset.source = track.youtubeVideoId ? 'youtube' : 'local';
     card.classList.remove('active-card');
     card.querySelector('.card-title').textContent = track.title;
     card.querySelector('.card-artist').textContent = track.artist;
     card.querySelector('.card-quick-play').title = `Play ${track.title}`;
+    addTrackSourceBadge(card, track);
     addRemoveTrackButton(card, track);
     albumCardsRow.appendChild(card);
 
@@ -386,8 +535,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function addTrackSourceBadge(card, track) {
+    if (card.querySelector('.track-source-badge')) return;
+    const badge = document.createElement('span');
+    badge.className = 'track-source-badge';
+    badge.textContent = track.youtubeVideoId ? 'ONLINE' : 'OFFLINE';
+    card.querySelector('.card-info').appendChild(badge);
+  }
+
   function addRemoveTrackButton(card, track) {
-    if (!track.src || card.querySelector('.card-remove-track')) return;
+    if ((!track.src && !track.youtubeVideoId) || card.querySelector('.card-remove-track')) return;
 
     const button = document.createElement('button');
     button.className = 'card-remove-track';
@@ -400,23 +557,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   getAlbumCards().forEach(card => {
     const track = engine.tracks.find(item => item.id === card.dataset.trackId);
-    if (track) addRemoveTrackButton(card, track);
+    if (track) {
+      addTrackSourceBadge(card, track);
+      addRemoveTrackButton(card, track);
+    }
   });
 
   async function removeTrackCard(card, button) {
     const track = engine.tracks.find(item => item.id === card.dataset.trackId);
-    if (!track || !track.src) return;
+    if (!track || (!track.src && !track.youtubeVideoId)) return;
 
-    const confirmed = window.confirm(
-      `Remove "${track.title}" from the player? The original file on disk will not be deleted.`
-    );
+    const removalMessage = track.youtubeVideoId
+      ? `Remove "${track.title}" from this browser's library? The YouTube video will not be affected.`
+      : `Remove "${track.title}" from the player? The original file on disk will not be deleted.`;
+    const confirmed = window.confirm(removalMessage);
     if (!confirmed) return;
 
     button.disabled = true;
+    if (engine.getCurrentTrack().id === track.id) setPlayState(false);
     const result = await engine.removeAudioTrack(track.id);
     card.remove();
     if (result.wasCurrent) {
-      setPlayState(false);
       loadTrackMeta(result.activeTrack);
     }
     showToast(`Removed: ${track.title}`);
@@ -440,41 +601,83 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = e.target.closest('.album-card');
     if (!card) return;
 
+    const selectedTrack = engine.tracks.find(track => track.id === card.dataset.trackId);
+    if (!selectedTrack) return;
+
+    setPlayState(false);
     const track = engine.selectTrackById(card.dataset.trackId);
     if (track) {
-      loadTrackMeta(track);
-      setPlayState(true);
+      loadTrackMeta(track, false);
+      setPlayState(true); // start for all track types — vinyl spins, YT plays audio
       showToast(`Now playing: ${track.title}`);
     }
   });
 
-  addTrackBtn.addEventListener('click', () => trackFileInput.click());
+  let isAddingTracks = false;
+  addTrackBtn.addEventListener('click', (e) => {
+    if (isAddingTracks) e.preventDefault();
+  });
 
   trackFileInput.addEventListener('change', async () => {
     const files = Array.from(trackFileInput.files || []);
     if (files.length === 0) return;
 
-    addTrackBtn.disabled = true;
+    isAddingTracks = true;
+    addTrackBtn.setAttribute('aria-disabled', 'true');
     let addedCount = 0;
     let failedCount = 0;
 
-    for (const file of files) {
-      try {
-        const track = await engine.addLocalTrack(file);
-        addLocalTrackCard(track);
-        addedCount++;
-      } catch (error) {
-        console.error(`Could not add audio file "${file.name}":`, error);
-        failedCount++;
+    try {
+      for (const file of files) {
+        try {
+          const track = await engine.addLocalTrack(file);
+          addSavedTrackCard(track);
+          addedCount++;
+        } catch (error) {
+          console.error(`Could not add audio file "${file.name}":`, error);
+          failedCount++;
+        }
       }
+    } finally {
+      isAddingTracks = false;
+      addTrackBtn.setAttribute('aria-disabled', 'false');
+      trackFileInput.value = '';
     }
 
-    addTrackBtn.disabled = false;
-    trackFileInput.value = '';
     if (failedCount > 0) {
       showToast(`${addedCount} song(s) added; ${failedCount} could not be added.`);
     } else {
       showToast(`${addedCount} song(s) added and saved in this browser.`);
+    }
+  });
+
+  addYoutubeTrackBtn.addEventListener('click', () => {
+    youtubeTrackDialog.showModal();
+    youtubeUrlInput.focus();
+  });
+
+  cancelYoutubeTrackBtn.addEventListener('click', () => youtubeTrackDialog.close());
+
+  youtubeTrackForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitButton = youtubeTrackForm.querySelector('.youtube-dialog-submit');
+    submitButton.disabled = true;
+
+    try {
+      const track = await engine.addYoutubeTrack(
+        youtubeUrlInput.value,
+        youtubeTitleInput.value,
+        youtubeArtistInput.value
+      );
+      addSavedTrackCard(track);
+      youtubeTrackDialog.close();
+      youtubeTrackForm.reset();
+      showToast('YouTube link saved. Internet is required to play it.');
+    } catch (error) {
+      console.error('Could not save YouTube link:', error);
+      showToast(error.message || 'Could not save this YouTube link.');
+    } finally {
+      submitButton.disabled = false;
     }
   });
 
@@ -484,6 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const name = row.querySelector('.playlist-name')?.textContent || 'Playlist';
       showToast(`Loading: ${name} (32 tracks)`);
       // Start track
+      setPlayState(false);
       const track = engine.selectTrackById('the-suffering');
       if (track) {
         loadTrackMeta(track);
@@ -538,8 +742,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // INITIALIZATION
   // ==========================================================================
   engine.onTrackEnded = () => {
+    // For YouTube tracks, track-ended is handled by onYtStateChange.
+    // This callback fires only for local/synth tracks.
+    setPlayState(false);
     const track = engine.nextTrack();
-    loadTrackMeta(track);
+    loadTrackMeta(track, false);
     setPlayState(true);
   };
   engine.onTrackDurationChange = updateProgressUI;
@@ -555,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
       getAlbumCards().forEach(card => {
         if (!availableTrackIds.has(card.dataset.trackId)) card.remove();
       });
-      tracks.forEach(addLocalTrackCard);
+      tracks.forEach(addSavedTrackCard);
     })
     .catch(error => {
       console.error('Could not restore saved local tracks:', error);

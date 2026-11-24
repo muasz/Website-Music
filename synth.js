@@ -134,7 +134,7 @@ class RetroAudioEngine {
     }
 
     return new Promise((resolve, reject) => {
-      const request = window.indexedDB.open('music2d-local-library', 2);
+      const request = window.indexedDB.open('music2d-local-library', 3);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains('tracks')) {
@@ -142,6 +142,9 @@ class RetroAudioEngine {
         }
         if (!db.objectStoreNames.contains('hiddenTracks')) {
           db.createObjectStore('hiddenTracks', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('youtubeTracks')) {
+          db.createObjectStore('youtubeTracks', { keyPath: 'id' });
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -153,21 +156,27 @@ class RetroAudioEngine {
     const db = await this.openLocalTrackDatabase();
     let records;
     let hiddenTrackIds;
+    let youtubeRecords;
 
     try {
       await new Promise((resolve, reject) => {
-        const transaction = db.transaction(['tracks', 'hiddenTracks'], 'readonly');
+        const transaction = db.transaction(['tracks', 'hiddenTracks', 'youtubeTracks'], 'readonly');
         const tracksRequest = transaction.objectStore('tracks').getAll();
         const hiddenRequest = transaction.objectStore('hiddenTracks').getAll();
+        const youtubeRequest = transaction.objectStore('youtubeTracks').getAll();
         tracksRequest.onsuccess = () => {
           records = tracksRequest.result;
         };
         hiddenRequest.onsuccess = () => {
           hiddenTrackIds = hiddenRequest.result.map(record => record.id);
         };
+        youtubeRequest.onsuccess = () => {
+          youtubeRecords = youtubeRequest.result;
+        };
         transaction.oncomplete = () => resolve();
         tracksRequest.onerror = () => reject(tracksRequest.error || new Error('Could not read the local music library.'));
         hiddenRequest.onerror = () => reject(hiddenRequest.error || new Error('Could not read removed-track records.'));
+        youtubeRequest.onerror = () => reject(youtubeRequest.error || new Error('Could not read saved YouTube links.'));
         transaction.onabort = () => reject(transaction.error || new Error('Reading the local music library was aborted.'));
       });
     } finally {
@@ -190,6 +199,13 @@ class RetroAudioEngine {
         src: URL.createObjectURL(file),
         localFile: true
       };
+      this.tracks.push(track);
+      loadedTracks.push(track);
+    });
+
+    youtubeRecords.forEach(record => {
+      if (this.tracks.some(track => track.id === record.id)) return;
+      const track = { ...record };
       this.tracks.push(track);
       loadedTracks.push(track);
     });
@@ -227,15 +243,32 @@ class RetroAudioEngine {
     }
   }
 
+  async deleteStoredYoutubeTrack(id) {
+    const db = await this.openLocalTrackDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('youtubeTracks', 'readwrite');
+        transaction.objectStore('youtubeTracks').delete(id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error('Could not delete the saved YouTube link.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Deleting the saved YouTube link was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
   async removeAudioTrack(id) {
     const index = this.tracks.findIndex(track => track.id === id);
-    if (index === -1 || !this.tracks[index].src) {
+    if (index === -1 || (!this.tracks[index].src && !this.tracks[index].youtubeVideoId)) {
       throw new Error('The selected audio track could not be found.');
     }
 
     const track = this.tracks[index];
     if (track.localFile) {
       await this.deleteStoredLocalTrack(id);
+    } else if (track.youtubeVideoId) {
+      await this.deleteStoredYoutubeTrack(id);
     } else {
       await this.saveHiddenTrackId(id);
     }
@@ -318,6 +351,59 @@ class RetroAudioEngine {
     };
     this.tracks.push(track);
     return track;
+  }
+
+  async addYoutubeTrack(urlValue, titleValue = '', artistValue = '') {
+    let url;
+    try {
+      url = new URL(urlValue);
+    } catch {
+      throw new Error('Enter a valid YouTube video link.');
+    }
+
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    const supportedHosts = new Set(['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be']);
+    if (!supportedHosts.has(hostname)) {
+      throw new Error('Use a YouTube video link from youtube.com or youtu.be.');
+    }
+
+    const pathMatch = url.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})/);
+    const videoId = hostname === 'youtu.be'
+      ? url.pathname.slice(1).split('/')[0]
+      : (url.searchParams.get('v') || (pathMatch && pathMatch[1]));
+    if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+      throw new Error('Could not find a valid video ID in that YouTube link.');
+    }
+    if (this.tracks.some(track => track.youtubeVideoId === videoId)) {
+      throw new Error('That YouTube video is already in your library.');
+    }
+
+    const record = {
+      id: `youtube-${videoId}`,
+      title: titleValue.trim() || `YouTube video ${videoId}`,
+      artist: artistValue.trim() ? `by ${artistValue.trim()}` : 'YouTube',
+      genre: 'YouTube',
+      likes: '+ 0',
+      duration: 0,
+      currentTime: 0,
+      youtubeVideoId: videoId
+    };
+
+    const db = await this.openLocalTrackDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('youtubeTracks', 'readwrite');
+        transaction.objectStore('youtubeTracks').put(record);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error('Could not save this YouTube link.'));
+        transaction.onabort = () => reject(transaction.error || new Error('Saving this YouTube link was aborted.'));
+      });
+    } finally {
+      db.close();
+    }
+
+    this.tracks.push(record);
+    return record;
   }
 
   /**
@@ -489,6 +575,16 @@ class RetroAudioEngine {
     }
 
     const track = this.getCurrentTrack();
+
+    if (track.youtubeVideoId) {
+      // YouTube audio is handled externally by the IFrame API player in app.js.
+      // Here we just activate the vinyl crackle ambience for the full turntable experience.
+      if (this.crackleGain && this.isCrackleEnabled) {
+        this.crackleGain.gain.setTargetAtTime(0.22, this.ctx.currentTime, 0.2);
+      }
+      return;
+    }
+
     if (track.src) {
       this.loadAudioTrack(track);
       if (this.masterGain) {
@@ -655,7 +751,7 @@ class RetroAudioEngine {
     if (!this.isPlaying) return;
 
     const track = this.tracks[this.currentTrackIndex];
-    if (track.src) return;
+    if (track.src || track.youtubeVideoId) return;
     const beatDurationMs = (60 / (track.bpm * this.tempoScale * this.playbackRate)) * 500;
 
     // Chord triggers every 4 beats

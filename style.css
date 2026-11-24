@@ -346,6 +346,34 @@ body {
   gap: 20px;
 }
 
+.youtube-player-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 2px solid var(--deck-border);
+  border-radius: 26px;
+  background: #0b0c0e;
+  box-shadow: 0 18px 30px -8px rgba(0, 0, 0, 0.35);
+}
+
+.youtube-player-container iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.player-column.youtube-active .waveform-container,
+.player-column.youtube-active .playback-controls,
+.player-column.youtube-active .audio-enhancements,
+.player-column.youtube-active .comment-badge {
+  display: none;
+}
+
+.player-column.youtube-active .now-playing-panel {
+  gap: 8px;
+}
+
 /* The Skeuomorphic Metallic Turntable Deck */
 .turntable-deck {
   width: 100%;
@@ -1125,9 +1153,48 @@ body {
   cursor: pointer;
 }
 
-.add-track-btn:disabled {
+.track-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.youtube-add-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: var(--font-pixel);
+  cursor: pointer;
+}
+
+.youtube-add-btn:focus-visible,
+.add-track-btn:focus-visible {
+  outline: 2px solid #121316;
+  outline-offset: 4px;
+}
+
+.track-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.track-file-input:focus-visible + .add-track-btn {
+  outline: 2px solid #121316;
+  outline-offset: 4px;
+}
+
+.add-track-btn[aria-disabled="true"] {
   cursor: wait;
   opacity: 0.6;
+  pointer-events: none;
 }
 
 /* Category Pills Row */
@@ -1383,6 +1450,18 @@ body {
   color: #6a6f78;
 }
 
+.track-source-badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: 1px solid #747982;
+  border-radius: 999px;
+  color: #25272c;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
 /* ==========================================================================
    FAVORITE PLAYLISTS SECTION
    ========================================================================== */
@@ -1526,6 +1605,87 @@ body {
   transform: translateX(-50%) translateY(20px);
 }
 
+.youtube-track-dialog {
+  width: min(440px, calc(100% - 32px));
+  margin: auto;
+  padding: 0;
+  border: 2px solid #8e939c;
+  border-radius: 20px;
+  color: var(--text-primary);
+  background: var(--chassis-bg);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.youtube-track-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.youtube-track-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+}
+
+.youtube-track-form h2 {
+  margin-bottom: 6px;
+  font-size: 18px;
+}
+
+.youtube-track-form label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.youtube-track-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #9297a0;
+  border-radius: 9px;
+  color: #111215;
+  background: #f4f5f6;
+  font: inherit;
+}
+
+.youtube-track-form input:focus-visible {
+  outline: 2px solid #121316;
+  outline-offset: 2px;
+}
+
+.youtube-track-form p {
+  margin-top: 2px;
+  color: #555a63;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.youtube-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.youtube-dialog-actions button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #777c84;
+  border-radius: 9px;
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+
+.youtube-dialog-cancel {
+  color: #1b1d21;
+  background: transparent;
+}
+
+.youtube-dialog-submit {
+  color: #fff;
+  background: #111215;
+}
+
 /* ==========================================================================
    RESPONSIVE DESIGN (Tablets & Mobiles)
    ========================================================================== */
@@ -1597,5 +1757,16 @@ body {
 
   .album-card {
     flex-basis: clamp(125px, 42vw, 155px);
+  }
+
+  .section-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .track-add-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
   }
 }
